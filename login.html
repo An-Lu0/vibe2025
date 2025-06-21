@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-form">
+            <h2>Login</h2>
+            <input type="text" id="username" placeholder="Username">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="login()">Login</button>
+            <div id="error" class="error-message"></div>
+            <div class="auth-link">Don't have an account? <a href="/register">Register</a></div>
+        </div>
+    </div>
+
+    <script>
+        async function login() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const errorElement = document.getElementById('error');
+            
+            if (!username || !password) {
+                errorElement.textContent = 'Please fill in all fields';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    window.location.href = '/';
+                } else {
+                    errorElement.textContent = result.error || 'Login failed';
+                }
+            } catch (error) {
+                errorElement.textContent = 'An error occurred';
+                console.error('Login error:', error);
+            }
+        }
+        
+        document.getElementById('password').addEventListener('keyup', function(event) {
+            if (event.key === 'Enter') login();
+        });
+    </script>
+</body>
+</html>

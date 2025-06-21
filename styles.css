@@ -1,0 +1,133 @@
+/* General styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* Todo list styles */
+#todoList {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 20px 0;
+}
+
+#todoList th, #todoList td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+#todoList th {
+    background-color: #f0f0f0;
+}
+
+.add-form {
+    margin: 20px 0;
+    display: flex;
+    gap: 10px;
+}
+
+.add-form input {
+    flex-grow: 1;
+    padding: 8px;
+}
+
+.add-form button, .edit-btn, .delete-btn {
+    padding: 8px 15px;
+    cursor: pointer;
+}
+
+.delete-btn {
+    background-color: #ff4444;
+    color: white;
+    border: none;
+    border-radius: 3px;
+}
+
+.edit-btn {
+    background-color: #33b5e5;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    margin-right: 5px;
+}
+
+/* Auth styles */
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.auth-form {
+    width: 300px;
+    padding: 20px;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.auth-form h2 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.auth-form input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+}
+
+.auth-form button {
+    width: 100%;
+    padding: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.auth-form button:hover {
+    background-color: #45a049;
+}
+
+.error-message {
+    color: red;
+    margin: 10px 0;
+    text-align: center;
+}
+
+.auth-link {
+    text-align: center;
+    margin-top: 15px;
+}
+
+/* User info */
+.user-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.user-info button {
+    padding: 5px 10px;
+    background-color: #ff4444;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}

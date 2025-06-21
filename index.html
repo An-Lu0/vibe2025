@@ -4,55 +4,53 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>To-Do List</title>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        #todoList {
-            border-collapse: collapse;
-            width: 70%;
-            margin: 0 auto;
-        }
-        #todoList th, #todoList td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        #todoList th { background-color: #f0f0f0; }
-        .add-form {
-            margin: 20px auto;
-            width: 70%;
-            display: flex;
-            gap: 10px;
-        }
-        .add-form input {
-            flex-grow: 1;
-            padding: 8px;
-        }
-        .add-form button { padding: 8px 15px; }
-        .edit-form { display: none; }
-    </style>
+    <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <h2 style="text-align: center;">To-Do List</h2>
-    
-    <table id="todoList">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Text</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody id="listBody">
-            {{rows}}
-        </tbody>
-    </table>
-    
-    <div class="add-form">
-        <input type="text" id="newItem" placeholder="Enter new item">
-        <button onclick="addItem()">Add</button>
+    <div class="container">
+        <h2>To-Do List</h2>
+        <div class="user-info">
+            <span id="usernameDisplay">User</span>
+            <button onclick="logout()">Logout</button>
+        </div>
+        
+        <table id="todoList">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Text</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="listBody">
+                {{rows}}
+            </tbody>
+        </table>
+        
+        <div class="add-form">
+            <input type="text" id="newItem" placeholder="Enter new item">
+            <button onclick="addItem()">Add</button>
+        </div>
     </div>
 
     <script>
+        // Display username - improved version
+        document.addEventListener('DOMContentLoaded', () => {
+            const usernameElement = document.getElementById('usernameDisplay');
+            
+            fetch('/api/me')
+                .then(res => {
+                    if (!res.ok) throw new Error('Not authorized');
+                    return res.json();
+                })
+                .then(data => {
+                    usernameElement.textContent = `${data.username || 'User'}`;
+                })
+                .catch(() => {
+                    usernameElement.textContent = 'User';
+                });
+        });
+
         // Add new item
         async function addItem() {
             const input = document.getElementById('newItem');
@@ -72,6 +70,7 @@
                     }
                 } catch (error) {
                     console.error('Error:', error);
+                    alert('Failed to add item');
                 }
             }
         }
@@ -84,6 +83,7 @@
                     window.location.reload();
                 } catch (error) {
                     console.error('Error:', error);
+                    alert('Failed to delete item');
                 }
             }
         }
@@ -92,6 +92,8 @@
         let currentEditId = null;
         
         function startEdit(id) {
+            if (currentEditId) return;
+            
             const row = document.querySelector(`tr[data-id="${id}"]`);
             const textCell = row.querySelector('.item-text');
             const currentText = textCell.textContent;
@@ -99,7 +101,7 @@
             textCell.innerHTML = `
                 <input type="text" id="edit-input-${id}" value="${currentText}">
                 <button onclick="saveEdit(${id})">Save</button>
-                <button onclick="cancelEdit(${id}, '${currentText}')">Cancel</button>
+                <button onclick="cancelEdit(${id}, '${currentText.replace(/'/g, "\\'")}')">Cancel</button>
             `;
             
             currentEditId = id;
@@ -118,6 +120,7 @@
                     window.location.reload();
                 } catch (error) {
                     console.error('Error:', error);
+                    alert('Failed to save changes');
                 }
             }
         }
@@ -127,6 +130,17 @@
             const textCell = row.querySelector('td:nth-child(2)');
             textCell.innerHTML = originalText;
             currentEditId = null;
+        }
+        
+        // Logout
+        async function logout() {
+            try {
+                await fetch('/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('Failed to logout');
+            }
         }
     </script>
 </body>
