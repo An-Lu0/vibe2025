@@ -12,7 +12,6 @@ const dbConfig = {
     database: 'todolist',
 };
 
-// Database functions
 async function queryDB(sql, params) {
     const connection = await mysql.createConnection(dbConfig);
     const [results] = await connection.execute(sql, params);
@@ -31,6 +30,9 @@ async function handleRequest(req, res) {
                 <tr data-id="${item.id}">
                     <td>${item.id}</td>
                     <td>${item.text}</td>
+                    <td>
+                        <button onclick="startEdit(${item.id}, '${item.text.replace(/'/g, "\\'")}')">Edit</button>
+                    </td>
                 </tr>
             `).join('');
             
@@ -46,6 +48,18 @@ async function handleRequest(req, res) {
                 res.writeHead(200, {'Content-Type': 'application/json'});
                 res.end(JSON.stringify({success: true}));
             });
+            
+        } else if (req.method === 'PUT' && parsedUrl.pathname.startsWith('/items/')) {
+            const id = parsedUrl.pathname.split('/')[2];
+            let body = '';
+            req.on('data', chunk => body += chunk.toString());
+            req.on('end', async () => {
+                const { text } = JSON.parse(body);
+                await queryDB('UPDATE items SET text = ? WHERE id = ?', [text, id]);
+                res.writeHead(200, {'Content-Type': 'application/json'});
+                res.end(JSON.stringify({success: true}));
+            });
+            
         } else {
             res.writeHead(404);
             res.end('Not found');

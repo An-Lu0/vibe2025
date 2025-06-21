@@ -38,6 +38,7 @@
             <tr>
                 <th>ID</th>
                 <th>Text</th>
+                <th>Action</th>
             </tr>
         </thead>
         <tbody id="listBody">
@@ -72,6 +73,40 @@
                     console.error('Error:', error);
                 }
             }
+        }
+
+        // Edit functionality
+        function startEdit(id, currentText) {
+            const row = document.querySelector(`tr[data-id="${id}"]`);
+            const textCell = row.querySelector('td:nth-child(2)');
+            textCell.innerHTML = `
+                <input type="text" id="edit-input-${id}" value="${currentText}">
+                <button onclick="saveEdit(${id})">Save</button>
+                <button onclick="cancelEdit(${id}, '${currentText}')">Cancel</button>
+            `;
+        }
+
+        async function saveEdit(id) {
+            const newText = document.getElementById(`edit-input-${id}`).value.trim();
+            
+            if (newText) {
+                try {
+                    await fetch(`/items/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: newText })
+                    });
+                    window.location.reload();
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+            }
+        }
+
+        function cancelEdit(id, originalText) {
+            const row = document.querySelector(`tr[data-id="${id}"]`);
+            const textCell = row.querySelector('td:nth-child(2)');
+            textCell.textContent = originalText;
         }
     </script>
 </body>
