@@ -12,6 +12,7 @@ const dbConfig = {
     database: 'todolist',
 };
 
+// Database functions
 async function queryDB(sql, params) {
     const connection = await mysql.createConnection(dbConfig);
     const [results] = await connection.execute(sql, params);
@@ -25,13 +26,16 @@ async function handleRequest(req, res) {
     try {
         if (req.method === 'GET' && parsedUrl.pathname === '/') {
             const html = await fs.promises.readFile(path.join(__dirname, 'index.html'), 'utf8');
-            const items = await queryDB('SELECT * FROM items');
-            const rows = items.map(item => `
+            const items = await queryDB('SELECT * FROM items ORDER BY id');
+            
+            // Generate rows with sequential numbering
+            const rows = items.map((item, index) => `
                 <tr data-id="${item.id}">
-                    <td>${item.id}</td>
-                    <td>${item.text}</td>
+                    <td>${index + 1}</td>
+                    <td class="item-text">${item.text}</td>
                     <td>
-                        <button onclick="startEdit(${item.id}, '${item.text.replace(/'/g, "\\'")}')">Edit</button>
+                        <button class="edit-btn" onclick="startEdit(${item.id})">Edit</button>
+                        <button class="delete-btn" onclick="deleteItem(${item.id})">×</button>
                     </td>
                 </tr>
             `).join('');
@@ -49,6 +53,12 @@ async function handleRequest(req, res) {
                 res.end(JSON.stringify({success: true}));
             });
             
+        } else if (req.method === 'DELETE' && parsedUrl.pathname.startsWith('/items/')) {
+            const id = parsedUrl.pathname.split('/')[2];
+            await queryDB('DELETE FROM items WHERE id = ?', [id]);
+            res.writeHead(200, {'Content-Type': 'application/json'});
+            res.end(JSON.stringify({success: true}));
+            
         } else if (req.method === 'PUT' && parsedUrl.pathname.startsWith('/items/')) {
             const id = parsedUrl.pathname.split('/')[2];
             let body = '';
@@ -59,7 +69,6 @@ async function handleRequest(req, res) {
                 res.writeHead(200, {'Content-Type': 'application/json'});
                 res.end(JSON.stringify({success: true}));
             });
-            
         } else {
             res.writeHead(404);
             res.end('Not found');
