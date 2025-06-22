@@ -131,3 +131,16 @@ body {
     border-radius: 3px;
     cursor: pointer;
 }
+
+/* Telegram buttons */
+#telegramBtn {
+    background-color: #0088cc;
+    color: white;
+    margin-right: 5px;
+}
+
+#unbindTelegramBtn {
+    background-color: #ff4444;
+    color: white;
+    margin-right: 5px;
+}

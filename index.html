@@ -11,6 +11,8 @@
         <h2>To-Do List</h2>
         <div class="user-info">
             <span id="usernameDisplay">User</span>
+            <button id="telegramBtn">Link Telegram account</button>
+            <button id="unbindTelegramBtn" style="display:none">Unlink telegram account</button>
             <button onclick="logout()">Logout</button>
         </div>
         
@@ -34,24 +36,118 @@
     </div>
 
     <script>
-        // Display username - improved version
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const usernameElement = document.getElementById('usernameDisplay');
+            const telegramBtn = document.getElementById('telegramBtn');
+            const unbindBtn = document.getElementById('unbindTelegramBtn');
             
-            fetch('/api/me')
-                .then(res => {
-                    if (!res.ok) throw new Error('Not authorized');
-                    return res.json();
-                })
-                .then(data => {
-                    usernameElement.textContent = `${data.username || 'User'}`;
-                })
-                .catch(() => {
-                    usernameElement.textContent = 'User';
-                });
+            try {
+                const response = await fetch('/api/me');
+                if (!response.ok) throw new Error('Not authorized');
+                
+                const data = await response.json();
+                usernameElement.textContent = data.username || 'User';
+                
+                if (data.hasTelegram) {
+                    telegramBtn.style.display = 'none';
+                    unbindBtn.style.display = 'inline-block';
+                }
+            } catch (error) {
+                console.error('Error fetching user:', error);
+                usernameElement.textContent = 'User';
+            }
         });
 
-        // Add new item
+        async function bindTelegram() {
+            const botLink = "@ToDo1278_Bot"; 
+            
+
+            try {
+                // 1. Пробуем скопировать ссылку автоматически
+                try {
+                await navigator.clipboard.writeText(botLink);
+                alert(`✅ Ссылка скопирована!\n\nБот: ${botLink}\n\n Для привязки Telegram:\n1. Перейдите к боту: ${botLink}\n2. Отправьте команду /start\n3. Введите полученный Chat ID ниже`);
+                } catch (copyError) {
+                // Если копирование не сработало, показываем инструкцию с возможностью ручного копирования
+                const shouldContinue = confirm(
+                    `Для привязки Telegram:\n\n` +
+                    `1. Перейдите к боту: ${botLink}\n` +
+                    `2. Отправьте команду /start\n` +
+                    `3. Введите полученный Chat ID ниже\n\n`
+                    
+                );
+                if (!shouldContinue) return;
+                }
+
+                // 2. Получаем Chat ID от пользователя
+                let chatId;
+                while (true) {
+                chatId = prompt("Введите Chat ID, который вам отправил бот:");
+                if (!chatId) return; // Пользователь нажал "Отмена"
+                
+                
+                if (/^-?\d+$/.test(chatId)) break;
+                alert("Некорректный Chat ID. Он должен содержать только цифры.\nПример: 123456789");
+                }
+
+                // 3. Отправляем запрос на привязку
+                try {
+                const response = await fetch('/bind-telegram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegramChatId: chatId })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert('✅ Telegram успешно привязан!');
+                    document.getElementById('telegramBtn').style.display = 'none';
+                    document.getElementById('unbindTelegramBtn').style.display = 'inline-block';
+                    
+                    // Опционально: открываем чат с ботом
+                    try {
+                    window.open(`https://t.me/${botUsername}?start=app`, '_blank');
+                    } catch (e) {
+                    console.log("Не удалось открыть Telegram", e);
+                    }
+                } else {
+                    throw new Error(result.error || "Неизвестная ошибка");
+                }
+                } catch (fetchError) {
+                console.error("Ошибка привязки:", fetchError);
+                alert(`❌ Ошибка привязки: ${fetchError.message || "Попробуйте позже"}`);
+                }
+
+            } catch (error) {
+                console.error("Неожиданная ошибка:", error);
+                alert("Произошла непредвиденная ошибка. Пожалуйста, попробуйте ещё раз.");
+            }
+            }
+
+        async function unbindTelegram() {
+            if (confirm('Вы уверены, что хотите отвязать Telegram?')) {
+                try {
+                    const response = await fetch('/unbind-telegram', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    if (response.ok) {
+                        alert('Telegram успешно отвязан!');
+                        document.getElementById('telegramBtn').style.display = 'inline-block';
+                        document.getElementById('unbindTelegramBtn').style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Unbind error:', error);
+                    alert('Ошибка отвязки Telegram');
+                }
+            }
+        }
+
+        document.getElementById('telegramBtn').addEventListener('click', bindTelegram);
+        document.getElementById('unbindTelegramBtn').addEventListener('click', unbindTelegram);
+
         async function addItem() {
             const input = document.getElementById('newItem');
             const text = input.value.trim();
@@ -75,7 +171,6 @@
             }
         }
         
-        // Delete item
         async function deleteItem(id) {
             if (confirm('Are you sure you want to delete this item?')) {
                 try {
@@ -88,7 +183,6 @@
             }
         }
         
-        // Edit item
         let currentEditId = null;
         
         function startEdit(id) {
@@ -132,7 +226,6 @@
             currentEditId = null;
         }
         
-        // Logout
         async function logout() {
             try {
                 await fetch('/logout', { method: 'POST' });

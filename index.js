@@ -1,3 +1,5 @@
+require('dotenv').config();
+const TelegramBot = require('node-telegram-bot-api');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -5,7 +7,19 @@ const mysql = require('mysql2/promise');
 const url = require('url');
 const bcrypt = require('bcrypt');
 const cookie = require('cookie');
+
+// Проверка токена
+if (!process.env.TELEGRAM_TOKEN) {
+  console.error('ОШИБКА: Токен не найден в .env файле!');
+  console.log('Проверьте:');
+  console.log('1. Файл .env существует в папке проекта');
+  console.log('2. Содержит строку TELEGRAM_TOKEN=ваш_токен');
+  console.log('3. Файл .env добавлен в .gitignore');
+  process.exit(1);
+}
+
 const PORT = 3000;
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 
 const dbConfig = {
     host: 'localhost',
@@ -14,7 +28,6 @@ const dbConfig = {
     database: 'todolist',
 };
 
-// Database functions
 async function queryDB(sql, params) {
     const connection = await mysql.createConnection(dbConfig);
     const [results] = await connection.execute(sql, params);
@@ -22,7 +35,6 @@ async function queryDB(sql, params) {
     return results;
 }
 
-// Auth middleware
 async function authenticate(req) {
     const cookies = cookie.parse(req.headers.cookie || '');
     if (!cookies.sessionId) return null;
@@ -39,12 +51,36 @@ async function authenticate(req) {
     }
 }
 
+async function sendUserNotification(userId, message) {
+    try {
+        const [user] = await queryDB(
+            'SELECT telegram_chat_id FROM users WHERE id = ?',
+            [userId]
+        );
+        
+        if (user.telegram_chat_id) {
+            await bot.sendMessage(user.telegram_chat_id, message);
+        }
+    } catch (error) {
+        console.error('Telegram notification error:', error);
+    }
+}
+
+bot.on('message', (msg) => {
+    if (msg.text === '/start') {
+        bot.sendMessage(
+            msg.chat.id,
+            `Ваш Chat ID: <code>${msg.chat.id}</code>\nСкопируйте его и введите в приложении`,
+            { parse_mode: 'HTML' }
+        );
+    }
+});
+
 async function handleRequest(req, res) {
     const parsedUrl = url.parse(req.url, true);
     const user = await authenticate(req);
     
     try {
-        // Serve static files
         if (req.method === 'GET' && /\.(css|js|html)$/.test(parsedUrl.pathname)) {
             try {
                 const content = await fs.promises.readFile(path.join(__dirname, parsedUrl.pathname));
@@ -58,7 +94,6 @@ async function handleRequest(req, res) {
             }
         }
 
-        // Auth routes
         if (req.method === 'GET' && parsedUrl.pathname === '/login') {
             if (user) {
                 res.writeHead(302, {'Location': '/'});
@@ -151,15 +186,97 @@ async function handleRequest(req, res) {
             return;
         }
         
-        // New endpoint to get current user info
         if (req.method === 'GET' && parsedUrl.pathname === '/api/me') {
             if (!user) {
                 res.writeHead(401, {'Content-Type': 'application/json'});
                 res.end(JSON.stringify({error: 'Unauthorized'}));
                 return;
             }
+            
+            const [userData] = await queryDB(
+                'SELECT username, telegram_chat_id FROM users WHERE id = ?',
+                [user.id]
+            );
+            
             res.writeHead(200, {'Content-Type': 'application/json'});
-            res.end(JSON.stringify({username: user.username}));
+            res.end(JSON.stringify({
+                username: userData.username,
+                hasTelegram: !!userData.telegram_chat_id
+            }));
+            return;
+        }
+        
+        if (req.method === 'POST' && parsedUrl.pathname === '/bind-telegram') {
+            if (!user) {
+                res.writeHead(401);
+                return res.end('Unauthorized');
+            }
+            
+            let body = '';
+            req.on('data', chunk => body += chunk.toString());
+            req.on('end', async () => {
+                const { telegramChatId } = JSON.parse(body);
+                
+                await queryDB(
+                    'UPDATE users SET telegram_chat_id = ? WHERE id = ?',
+                    [telegramChatId, user.id]
+                );
+                
+                try {
+                    await bot.sendMessage(
+                        telegramChatId,
+                        "✅ Ваш аккаунт успешно привязан к To-Do приложению!\n" +
+                        "Теперь вы будете получать уведомления о задачах."
+                    );
+                } catch (error) {
+                    console.error('Ошибка отправки уведомления:', error);
+                }
+                
+                res.writeHead(200, {'Content-Type': 'application/json'});
+                res.end(JSON.stringify({ success: true }));
+            });
+            return;
+        }
+        
+        if (req.method === 'POST' && parsedUrl.pathname === '/unbind-telegram') {
+            if (!user) {
+                res.writeHead(401);
+                return res.end('Unauthorized');
+            }
+            
+            try {
+                // Получаем chat_id перед отвязкой
+                const [userData] = await queryDB(
+                    'SELECT telegram_chat_id FROM users WHERE id = ?',
+                    [user.id]
+                );
+                
+                // Отвязываем Telegram
+                await queryDB(
+                    'UPDATE users SET telegram_chat_id = NULL WHERE id = ?',
+                    [user.id]
+                );
+                
+                // Отправляем уведомление в Telegram, если chat_id был
+                if (userData && userData.telegram_chat_id) {
+                    try {
+                        await bot.sendMessage(
+                            userData.telegram_chat_id,
+                            "❌ Ваш аккаунт отвязан от To-Do приложения.\n" +
+                            "Вы больше не будете получать уведомления."
+                        );
+                    } catch (error) {
+                        console.error('Ошибка отправки уведомления:', error);
+                    }
+                }
+                
+                res.writeHead(200, {'Content-Type': 'application/json'});
+                res.end(JSON.stringify({ success: true }));
+            } catch (error) {
+                console.error('Ошибка при отвязке Telegram:', error);
+                res.writeHead(500, {'Content-Type': 'application/json'});
+                res.end(JSON.stringify({ success: false, error: 'Internal server error' }));
+            }
             return;
         }
         
@@ -181,7 +298,6 @@ async function handleRequest(req, res) {
             return;
         }
         
-        // Protected routes
         if (!user) {
             res.writeHead(302, {'Location': '/login'});
             res.end();
@@ -205,37 +321,49 @@ async function handleRequest(req, res) {
             
             res.writeHead(200, {'Content-Type': 'text/html'});
             res.end(html.replace('{{rows}}', rows));
-            
-        } else if (req.method === 'POST' && parsedUrl.pathname === '/items') {
+            return;
+        }
+        
+        if (req.method === 'POST' && parsedUrl.pathname === '/items') {
             let body = '';
             req.on('data', chunk => body += chunk.toString());
             req.on('end', async () => {
                 const { text } = JSON.parse(body);
                 await queryDB('INSERT INTO items (text, user_id) VALUES (?, ?)', [text, user.id]);
+                
+                await sendUserNotification(user.id, `📝 Добавлена задача: "${text}"`);
+                
                 res.writeHead(200, {'Content-Type': 'application/json'});
                 res.end(JSON.stringify({success: true}));
             });
-            
-        } else if (req.method === 'DELETE' && parsedUrl.pathname.startsWith('/items/')) {
+            return;
+        }
+        
+        if (req.method === 'DELETE' && parsedUrl.pathname.startsWith('/items/')) {
             const id = parsedUrl.pathname.split('/')[2];
             const [item] = await queryDB('SELECT * FROM items WHERE id = ? AND user_id = ?', [id, user.id]);
+            
             if (!item) {
                 res.writeHead(403);
-                res.end('Forbidden');
-                return;
+                return res.end('Forbidden');
             }
             
             await queryDB('DELETE FROM items WHERE id = ?', [id]);
+            
+            await sendUserNotification(user.id, `❌ Удалена задача: "${item.text}"`);
+            
             res.writeHead(200, {'Content-Type': 'application/json'});
             res.end(JSON.stringify({success: true}));
-            
-        } else if (req.method === 'PUT' && parsedUrl.pathname.startsWith('/items/')) {
+            return;
+        }
+        
+        if (req.method === 'PUT' && parsedUrl.pathname.startsWith('/items/')) {
             const id = parsedUrl.pathname.split('/')[2];
             const [item] = await queryDB('SELECT * FROM items WHERE id = ? AND user_id = ?', [id, user.id]);
+            
             if (!item) {
                 res.writeHead(403);
-                res.end('Forbidden');
-                return;
+                return res.end('Forbidden');
             }
             
             let body = '';
@@ -243,13 +371,17 @@ async function handleRequest(req, res) {
             req.on('end', async () => {
                 const { text } = JSON.parse(body);
                 await queryDB('UPDATE items SET text = ? WHERE id = ?', [text, id]);
+                
+                await sendUserNotification(user.id, `✏️ Обновлена задача: "${text}"`);
+                
                 res.writeHead(200, {'Content-Type': 'application/json'});
                 res.end(JSON.stringify({success: true}));
             });
-        } else {
-            res.writeHead(404);
-            res.end('Not found');
+            return;
         }
+        
+        res.writeHead(404);
+        res.end('Not found');
     } catch (error) {
         console.error(error);
         res.writeHead(500);
